@@ -12,9 +12,10 @@ import java.lang.reflect.Method;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.env.Environment;
-import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
 
@@ -36,6 +37,7 @@ public class Dynamobee implements InitializingBean {
   private String changeLogsScanPackage;
   private DynamoDbClient dynamoDbClient;
   private Environment springEnvironment;
+  private ApplicationContext applicationContext;
 
 
   /**
@@ -107,7 +109,13 @@ public class Dynamobee implements InitializingBean {
 
       Object changelogInstance = null;
       try {
-        changelogInstance = changelogClass.getConstructor().newInstance();
+        if(applicationContext == null) {
+          logger.debug("ApplicationContext is not set, using default constructor for changelog class: " + changelogClass.getName());
+          changelogInstance = changelogClass.getConstructor().newInstance();
+        } else {
+          logger.debug("ApplicationContext is set, using it to get changelog bean: " + changelogClass.getName());
+          changelogInstance = applicationContext.getBean(changelogClass);
+        }
         List<Method> changesetMethods = service.fetchChangeSets(changelogInstance.getClass());
 
         for (Method changesetMethod : changesetMethods) {
@@ -128,7 +136,7 @@ public class Dynamobee implements InitializingBean {
             logger.error(e.getMessage());
           }
         }
-      } catch (NoSuchMethodException | IllegalAccessException | InstantiationException e) {
+      } catch (NoSuchMethodException | IllegalAccessException | InstantiationException | BeansException e) {
         throw new DynamobeeException(e.getMessage(), e);
       } catch (InvocationTargetException e) {
         Throwable targetException = e.getTargetException();
@@ -252,6 +260,17 @@ public class Dynamobee implements InitializingBean {
    */
   public Dynamobee setSpringEnvironment(Environment environment) {
     this.springEnvironment = environment;
+    return this;
+  }
+
+  /**
+   * Set ApplicationContext object for Spring integration
+   *
+   * @param applicationContext org.springframework.context.ApplicationContext object to inject
+   * @return Dynamobee object for fluent interface
+   */
+  public Dynamobee setApplicationContext(ApplicationContext applicationContext) {
+    this.applicationContext = applicationContext;
     return this;
   }
 
